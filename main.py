@@ -69,9 +69,12 @@ class AzusaImp(Star):
         """
         user_info = {
             "qq_number": qq_number,
-            "nickname": event.get_sender_name(),
             "timestamp": event.message_obj.timestamp
         }
+        
+        # 只有在需要更新用户信息时才设置昵称
+        if update_user_info:
+            user_info["nickname"] = event.get_sender_name()
     
         try:
             # 检查是否为QQ平台
@@ -197,8 +200,11 @@ class AzusaImp(Star):
         if user_info.get('gender') != '未知':
             prompt_parts.append(f"性别: {user_info.get('gender')}")
         
-        # 年龄信息
+        # 生日信息 - 总是显示
         birthday = user_info.get('birthday', '未知')
+        prompt_parts.append(f"生日: {birthday}")
+        
+        # 年龄信息
         if birthday != '未知':
             age = self.calculate_age(birthday)
             if age > 0:
@@ -232,17 +238,27 @@ class AzusaImp(Star):
             all_user_info = self.load_user_info()
             all_group_info = self.load_group_info()
             
-            # 获取最新的用户信息（包含群信息）
-            user_info = await self.get_qq_user_info(event, qq_number, update_user_info=True)
+            # 如果用户信息不存在，则获取并保存
+            if qq_number not in all_user_info:
+                user_info = await self.get_qq_user_info(event, qq_number, update_user_info=True)
+                all_user_info[qq_number] = user_info
+                self.save_user_info(all_user_info)
+                logger.info(f"已记录新用户基本信息: QQ{qq_number}")
+            else:
+                # 用户信息已存在，只更新群信息
+                if is_group:
+                    user_info = await self.get_qq_user_info(event, qq_number, update_user_info=False)
+                    # 只更新群相关信息到用户信息
+                    if 'group_role' in user_info:
+                        all_user_info[qq_number]['group_role'] = user_info['group_role']
+                    if 'group_title' in user_info:
+                        all_user_info[qq_number]['group_title'] = user_info['group_title']
+                    self.save_user_info(all_user_info)
             
-            # 更新用户信息
-            all_user_info[qq_number] = user_info
-            self.save_user_info(all_user_info)
-            logger.info(f"已更新用户基本信息: QQ{qq_number}")
-            
-            # 如果是群聊，保存群成员信息到群信息文件
+            # 如果是群聊，保存群成员信息到群信息文件（每次都更新）
             if is_group:
                 group_key = f"{group_id}_{qq_number}"
+                user_info = all_user_info[qq_number]
                 group_info = {
                     "qq_number": qq_number,
                     "group_id": group_id,
@@ -256,12 +272,13 @@ class AzusaImp(Star):
                 logger.info(f"已更新用户 {qq_number} 在群 {group_id} 的群成员信息")
             
             # 将用户信息添加到系统提示词
-            user_prompt = self.format_user_info_for_prompt(user_info, is_group)
+            user_prompt = self.format_user_info_for_prompt(all_user_info[qq_number], is_group)
             
             if user_prompt:
-                # 在现有系统提示词前添加用户信息
+                # 在现有系统提示词前添加用户信息，并明确要求使用昵称称呼用户
                 original_system_prompt = req.system_prompt or ""
-                req.system_prompt = f"当前对话用户信息: {user_prompt}。\n{original_system_prompt}"
+                nickname = all_user_info[qq_number].get('nickname', '用户')
+                req.system_prompt = f"当前对话用户信息: {user_prompt}。请称呼用户为{nickname}。{original_system_prompt}"
                     
                 logger.debug(f"已将用户信息添加到提示词: {user_prompt}")
     
