@@ -207,7 +207,7 @@ class AzusaImp(Star):
             qq_number = event.get_sender_id()
             all_user_info = self.load_user_info()
             
-                if qq_number not in all_user_info:
+            if qq_number not in all_user_info:
                 yield event.plain_result("您的用户信息不存在，请先发送一条消息触发信息记录")
                 return
             
