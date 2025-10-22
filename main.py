@@ -132,64 +132,6 @@ class AzusaImp(Star):
             logger.error(f"获取用户 {qq_number} 信息时出错: {e}")
     
         return user_info
-    
-        try:
-            # 检查是否为QQ平台
-            if event.get_platform_name() != "aiocqhttp":
-                return user_info
-    
-            # 调用QQ协议端API获取用户信息
-            from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import AiocqhttpMessageEvent
-            if isinstance(event, AiocqhttpMessageEvent):
-                client = event.bot
-                
-                # 获取基础用户信息
-                payloads = {
-                    "user_id": int(qq_number),
-                    "no_cache": True
-                }
-                
-                stranger_info = await client.api.call_action('get_stranger_info', **payloads)
-                
-                # 尝试获取生日信息
-                birthday = self.parse_birthday(stranger_info)
-                
-                user_info.update({
-                    "gender": self.get_gender_text(stranger_info.get('sex', 'unknown')),
-                    "birthday": birthday
-                })
-    
-                # 如果是群聊消息，获取群成员信息
-                group_id = event.get_group_id()
-                if group_id:
-                    group_member_payloads = {
-                        "group_id": int(group_id),
-                        "user_id": int(qq_number),
-                        "no_cache": True
-                    }
-                    
-                    try:
-                        group_member_info = await client.api.call_action('get_group_member_info', **group_member_payloads)
-                        
-                        # 获取群身份和头衔
-                        role = group_member_info.get('role', 'member')
-                        title = group_member_info.get('title', '') or '无'
-                        
-                        user_info.update({
-                            "group_role": role,
-                            "group_title": title
-                        })
-                        
-                        logger.info(f"成功获取用户 {qq_number} 在群 {group_id} 的成员信息")
-                    except Exception as e:
-                        logger.error(f"获取群成员信息失败: {e}")
-                
-                logger.info(f"成功获取用户 {qq_number} 的基本信息")
-                
-        except Exception as e:
-            logger.error(f"获取用户 {qq_number} 信息时出错: {e}")
-    
-        return user_info
 
     def get_group_role_text(self, role: str) -> str:
         """将群身份代码转换为中文文本"""
@@ -290,27 +232,17 @@ class AzusaImp(Star):
             all_user_info = self.load_user_info()
             all_group_info = self.load_group_info()
             
-            # 如果用户基本信息不存在，则获取并保存（仅第一次）
-            if qq_number not in all_user_info:
-                user_info = await self.get_qq_user_info(event, qq_number, update_user_info=True)
-                all_user_info[qq_number] = user_info
-                self.save_user_info(all_user_info)
-                logger.info(f"已记录新用户基本信息: QQ{qq_number}")
-            else:
-                # 用户信息已存在，只更新群信息（如果需要）
-                if is_group:
-                    user_info = await self.get_qq_user_info(event, qq_number, update_user_info=False)
-                    # 只更新群相关信息到用户信息
-                    if 'group_role' in user_info:
-                        all_user_info[qq_number]['group_role'] = user_info['group_role']
-                    if 'group_title' in user_info:
-                        all_user_info[qq_number]['group_title'] = user_info['group_title']
-                    self.save_user_info(all_user_info)
+            # 获取最新的用户信息（包含群信息）
+            user_info = await self.get_qq_user_info(event, qq_number, update_user_info=True)
             
-            # 如果是群聊，保存群成员信息到群信息文件（每次都更新）
+            # 更新用户信息
+            all_user_info[qq_number] = user_info
+            self.save_user_info(all_user_info)
+            logger.info(f"已更新用户基本信息: QQ{qq_number}")
+            
+            # 如果是群聊，保存群成员信息到群信息文件
             if is_group:
                 group_key = f"{group_id}_{qq_number}"
-                user_info = all_user_info[qq_number]
                 group_info = {
                     "qq_number": qq_number,
                     "group_id": group_id,
@@ -324,7 +256,7 @@ class AzusaImp(Star):
                 logger.info(f"已更新用户 {qq_number} 在群 {group_id} 的群成员信息")
             
             # 将用户信息添加到系统提示词
-            user_prompt = self.format_user_info_for_prompt(all_user_info[qq_number], is_group)
+            user_prompt = self.format_user_info_for_prompt(user_info, is_group)
             
             if user_prompt:
                 # 在现有系统提示词前添加用户信息
