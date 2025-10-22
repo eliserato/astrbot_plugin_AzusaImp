@@ -10,8 +10,7 @@ from datetime import datetime
 @register("AzusaImp", 
           "有栖日和", 
           "梓的用户信息和印象插件", 
-          "0.0.1", 
-          "https://github.com/Angus-YZH/astrbot_plugin_AzusaImp")
+          "0.0.1")
 
 class AzusaImp(Star):
     def __init__(self, context: Context):
@@ -181,12 +180,12 @@ class AzusaImp(Star):
             # 将用户信息添加到系统提示词
             user_prompt = self.format_user_info_for_prompt(all_user_info[qq_number])
             
-            if user_prompt:
-                # 在现有系统提示词前添加用户信息
-                original_system_prompt = req.system_prompt or ""
-                req.system_prompt = f"当前对话用户信息: {user_prompt}。\n\n{original_system_prompt}"
+        if user_prompt:
+            # 在现有系统提示词前添加用户信息
+            original_system_prompt = req.system_prompt or ""
+            req.system_prompt = f"当前对话用户信息: {user_prompt}。\n{original_system_prompt}"
                 
-                logger.debug(f"已将用户信息添加到提示词: {user_prompt}")
+            logger.debug(f"已将用户信息添加到提示词: {user_prompt}")
 
         except Exception as e:
             logger.error(f"在处理LLM请求钩子时出错: {e}")
