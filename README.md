@@ -1,8 +1,8 @@
-# helloworld
+# AzusaImp
 
-AstrBot 插件模板
+梓的用户印象插件
 
-A template plugin for AstrBot plugin feature
+正在开发中
 
 # 支持
 
